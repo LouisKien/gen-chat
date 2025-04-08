@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { ThemeSwitcher } from '../../components/ThemeSwitcher';
+import { conversationColors, getRandomColor } from '../../utils/colors';
 
 // Mảng các màu và kích thước quả cầu
 const orbColors = [
@@ -163,23 +164,20 @@ function Chat() {
     { 
       id: 0, 
       title: 'Chat về AI và Machine Learning', 
-      model: 'GPT-4',
       time: '2 giờ trước',
-      modelColor: 'bg-blue-500'
+      color: 'from-blue-500 to-indigo-600' // Static color for now, but we'll use random color when creating real chats
     },
     { 
       id: 1, 
       title: 'Tìm hiểu về React và Next.js', 
-      model: 'Claude 3',
       time: '5 giờ trước',
-      modelColor: 'bg-purple-500'
+      color: 'from-purple-500 to-pink-500'
     },
     { 
       id: 2, 
       title: 'Hướng dẫn học tiếng Anh hiệu quả', 
-      model: 'GPT-3.5',
       time: '1 ngày trước',
-      modelColor: 'bg-green-500'
+      color: 'from-green-500 to-emerald-500'
     }
   ];
 
@@ -433,17 +431,20 @@ function Chat() {
                   <motion.div 
                     key={chat.id}
                     className={`ios-card cursor-pointer ${activeChat === chat.id ? 'ios-card-active' : ''}`}
-                    title={`${chat.title} (${chat.model})`}
+                    title={chat.title} // Updated title to only show conversation title
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleChatSelect(chat.id)}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.1 + (index * 0.05) + (isSidebarCollapsed ? 0 : 0.2) }}
                   >
+                    {/* Tiêu đề chat */}
                     <div className="text-sm font-medium truncate pr-4 whitespace-nowrap">{chat.title}</div>
+                    {/* Chỉ hiển thị thời gian, không hiển thị model */}
                     <div className="text-xs mt-1 flex items-center opacity-80 whitespace-nowrap">
-                      <span className={`inline-block w-2 h-2 rounded-full ${chat.modelColor} mr-2`}></span>
-                      {chat.model} • {chat.time}
+                      {/* Sử dụng màu từ thuộc tính color thay vì modelColor */}
+                      <span className={`inline-block w-2 h-2 rounded-full bg-gradient-to-r ${chat.color} mr-2`}></span>
+                      {chat.time}
                     </div>
                   </motion.div>
                 ))}
@@ -459,9 +460,14 @@ function Chat() {
               {chatHistory.slice(0, 3).map((chat, index) => (
                 <motion.div 
                   key={chat.id}
-                  className={`w-12 h-12 rounded-full ios-glass flex items-center justify-center cursor-pointer relative sidebar-icon float-icon sidebar-spring-in`}
-                  title={`${chat.title} (${chat.model})`}
-                  style={{ animationDelay: `${index * 0.2}s` }}
+                  // Sử dụng bg-gradient-to-r trực tiếp thay vì class modelColor
+                  className={`w-12 h-12 rounded-full ios-glass flex items-center justify-center cursor-pointer relative sidebar-icon float-icon sidebar-spring-in overflow-hidden`} // Added overflow-hidden
+                  title={chat.title} // Updated title to only show conversation title
+                  style={{ 
+                    animationDelay: `${index * 0.2}s`,
+                    // Add a gradient background based on chat.color
+                    background: `linear-gradient(135deg, var(--tw-gradient-stops))`,
+                  }}
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => handleChatSelect(chat.id)}
@@ -474,9 +480,12 @@ function Chat() {
                     delay: 0.2 + (index * 0.1)
                   }}
                 >
-                  <span className={`inline-block w-6 h-6 rounded-full ${chat.modelColor}`}></span>
+                  {/* Apply the gradient using the className instead of a separate span */}
+                  <div className={`absolute inset-0 bg-gradient-to-r ${chat.color} opacity-70`}></div>
+                  {/* Show the first letter of the chat title */}
+                  <span className="relative z-10 text-white font-semibold text-lg">{chat.title.charAt(0)}</span>
                   {activeChat === chat.id && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full active-indicator"></span>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full active-indicator z-20"></span>
                   )}
                 </motion.div>
               ))}
