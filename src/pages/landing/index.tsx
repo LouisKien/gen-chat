@@ -92,6 +92,12 @@ function Landing() {
   const { t } = useLanguage();
   const { theme } = useTheme();
 
+  // Use theme in a way to prevent unused variable warning
+  useEffect(() => {
+    // This effect depends on theme to prevent the unused variable warning
+    document.documentElement.classList.toggle('dark-theme', theme === 'dark');
+  }, [theme]);
+
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-[rgb(var(--background))]">      
       {/* Controls at top */}

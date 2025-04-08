@@ -1,13 +1,11 @@
 import { motion } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { Link } from 'react-router-dom';
 
 function Landing() {
   const { t } = useLanguage();
-  const { theme } = useTheme();
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-[rgb(var(--background))]">      

@@ -4,7 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
-import { conversationColors, getRandomColor } from '../../utils/colors';
+import { getRandomColor } from '../../utils/colors';
 import { callChatAPI, Message, getAvailableModels, colorToGradient, getSummaryTitle, ChatHistory } from '../../utils/api';
 import { getAllChatHistory, getChatById, saveChat, deleteChat, formatTime } from '../../utils/localStorage';
 import { v4 as uuidv4 } from 'uuid';
@@ -566,6 +566,7 @@ function Chat() {
   };
 
   const toggleSidebarCollapse = () => {
+    // Use animateContent state to trigger animation
     setAnimateContent(true);
     setSidebarCollapsed(!isSidebarCollapsed);
     
@@ -581,6 +582,9 @@ function Chat() {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Add class conditionally based on animateContent state
+  const contentClassName = `flex-1 flex flex-col h-screen relative z-10 transition-all duration-300 ease-out ${isSidebarCollapsed ? 'md:ml-0' : ''} ${animateContent ? 'animate-content-shift' : ''}`;
 
   return (
     <div className="min-h-screen h-screen w-full flex relative overflow-hidden bg-[rgb(var(--background))]">
@@ -962,7 +966,7 @@ function Chat() {
       </motion.aside>
       
       {/* Main content */}
-      <main className={`flex-1 flex flex-col h-screen relative z-10 transition-all duration-300 ease-out ${isSidebarCollapsed ? 'md:ml-0' : ''}`}>
+      <main className={contentClassName}>
         {/* Mobile Header */}
         <div className="flex md:hidden items-center p-4 glass-effect rounded-t-3xl sticky top-0 z-10">
           <motion.button 

@@ -1,5 +1,4 @@
 import { useLanguage } from '../context/LanguageContext';
-import { Language } from '../i18n';
 
 export const LanguageSwitcher = () => {
   const { language, setLanguage } = useLanguage();

@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react';
-
 // Định nghĩa interface cho model
 export interface Model {
   id: string;
