@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { conversationColors, getRandomColor } from '../../utils/colors';
-import { callChatAPI, Message, availableModels, colorToGradient, getSummaryTitle, ChatHistory } from '../../utils/api';
+import { callChatAPI, Message, getAvailableModels, colorToGradient, getSummaryTitle, ChatHistory } from '../../utils/api';
 import { getAllChatHistory, getChatById, saveChat, deleteChat, formatTime } from '../../utils/localStorage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -247,7 +247,7 @@ function Chat() {
   const [inputText, setInputText] = useState('');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('google/gemini-2.0-flash-exp:free');
+  const [selectedModel, setSelectedModel] = useState(import.meta.env.VITE_API_PROVIDER === 'gemini' ? 'gemini-2.0-flash' : 'google/gemini-2.0-flash-exp:free');
   const [activeChat, setActiveChat] = useState<string | null>(chatId || null);
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
@@ -286,7 +286,7 @@ function Chat() {
   }, [isSidebarOpen]);
 
   // Chuyển đổi từ danh sách model object sang array để hiển thị
-  const models = Object.values(availableModels).map(model => ({
+  const models = Object.values(getAvailableModels()).map(model => ({
     id: model.id,
     name: model.name,
     description: model.description,
@@ -1133,6 +1133,14 @@ function Chat() {
                         
                         {/* Popup Body */}
                         <div className="p-3 max-h-[480px] overflow-y-auto custom-scrollbar bg-[rgb(var(--background))] border-t border-b border-white/10 dark:border-gray-700/30">
+                          {/* API Provider info */}
+                          <div className="text-xs px-2 py-1 mb-3 flex items-center text-[rgb(var(--text))]/70">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            API: <span className="font-medium ml-1">{import.meta.env.VITE_API_PROVIDER === 'gemini' ? 'Google Gemini' : 'OpenRouter'}</span>
+                          </div>
+                          
                           <div className="space-y-2">
                             {models.map(model => (
                               <motion.button
@@ -1179,7 +1187,7 @@ function Chat() {
                         
                         {/* Popup Footer */}
                         <div className="p-2 bg-gradient-to-r from-blue-600/90 to-purple-600/90 text-white text-xs text-center">
-                          {t('chat.poweredBy')} OpenRouter
+                          {t('chat.poweredBy')} {import.meta.env.VITE_API_PROVIDER === 'gemini' ? 'Google Gemini' : 'OpenRouter'}
                         </div>
                       </motion.div>
                     )}
