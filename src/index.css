@@ -1,1 +1,677 @@
 @import "tailwindcss"; 
+
+/* Prevent flash during page load */
+html {
+  visibility: visible;
+  opacity: 1;
+}
+
+@layer base {
+  :root {
+    --background: 240 247 255; /* Màu nền sáng */
+    --text: 30 41 59; /* Màu chữ khi theme sáng */
+    --card-bg: 255 255 255 / 80%;
+    --card-border: 30 41 59 / 20%;
+    --ios-blur: 20px;
+    --sidebar-bg: 230 240 250 / 80%;
+    --sidebar-border: 170 180 215 / 40%;
+    --sidebar-item-bg: 255 255 255 / 70%;
+    --sidebar-item-border: 170 180 215 / 60%;
+    --sidebar-text: 30 41 59;
+  }
+
+  .dark {
+    --background: 12 15 26; /* Màu nền tối */
+    --text: 248 250 252; /* Màu chữ khi theme tối */
+    --card-bg: 30 41 59 / 60%;
+    --card-border: 255 255 255 / 15%;
+    --ios-blur: 20px;
+    --sidebar-bg: 15 23 42 / 80%;
+    --sidebar-border: 30 41 59 / 40%;
+    --sidebar-item-bg: 30 41 59 / 70%;
+    --sidebar-item-border: 51 65 85 / 40%;
+    --sidebar-text: 226 232 240;
+    color-scheme: dark;
+  }
+  
+  .light {
+    color-scheme: light;
+  }
+
+  html {
+    transition: colors 0.3s;
+  }
+
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--text));
+  }
+}
+
+@layer components {
+  .glass-effect {
+    backdrop-filter: blur(12px);
+    background-color: rgba(var(--background), 0.4);
+    border: 1px solid rgba(var(--background), 0.3);
+  }
+  
+  .text-gradient {
+    background-image: linear-gradient(to right, rgb(59, 130, 246), rgb(147, 51, 234));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* iOS 18 Styles */
+  .ios-glass {
+    backdrop-filter: blur(var(--ios-blur));
+    background: rgba(var(--sidebar-bg));
+    border: 1px solid rgba(var(--sidebar-border));
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .ios-sidebar {
+    border-radius: 24px;
+    height: calc(100vh - 16px);
+    overflow: hidden;
+    backdrop-filter: blur(var(--ios-blur));
+    background: rgba(var(--sidebar-bg));
+    border: none;
+    box-shadow: none;
+    color: rgb(var(--sidebar-text));
+  }
+
+  @media (max-width: 768px) {
+    .ios-sidebar {
+      border-radius: 0;
+      height: 100vh;
+      margin: 0;
+      border: none;
+    }
+  }
+
+  .rainbow-border {
+    position: relative;
+    z-index: 0;
+    border-radius: 24px;
+    overflow: hidden;
+  }
+
+  .rainbow-border::before {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    left: -50%;
+    top: -50%;
+    width: 200%;
+    height: 200%;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-size: 50% 50%, 50% 50%;
+    background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+    background-image: linear-gradient(#ff6b6b, #ffb347),
+                      linear-gradient(#4158d0, #c850c0),
+                      linear-gradient(#43e97b, #38f9d7),
+                      linear-gradient(#fa71cd, #c471f5);
+    animation: rotate 10s linear infinite;
+  }
+
+  .rainbow-border::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    left: 2px;
+    top: 2px;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+    background: rgba(var(--sidebar-bg));
+    border-radius: 22px;
+    backdrop-filter: blur(var(--ios-blur));
+  }
+
+  .ios-button {
+    backdrop-filter: blur(var(--ios-blur));
+    background: rgba(var(--sidebar-item-bg));
+    border: 1px solid rgba(var(--sidebar-item-border));
+    border-radius: 9999px;
+    padding: 0.5rem 1rem;
+    transition-property: all;
+    transition-duration: 300ms;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+    color: rgb(var(--sidebar-text));
+  }
+
+  .ios-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .ios-button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+  }
+
+  .ios-card {
+    backdrop-filter: blur(var(--ios-blur));
+    background: rgba(var(--sidebar-item-bg));
+    border: 1px solid rgba(var(--sidebar-item-border));
+    border-radius: 1rem;
+    padding: 0.75rem;
+    transition-property: all;
+    transition-duration: 300ms;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    color: rgb(var(--sidebar-text));
+  }
+
+  .ios-card::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(120deg, transparent, rgba(var(--sidebar-item-border), 0.3), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+
+  .ios-card:hover {
+    border-color: rgba(var(--sidebar-item-border), 0.8);
+    box-shadow: 
+      0 7px 20px rgba(0, 0, 0, 0.1),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    animation: pulse 2s infinite;
+  }
+
+  .ios-card:hover::before {
+    transform: translateX(100%);
+  }
+
+  .ios-card:active {
+    transform: scale(0.98);
+    transition-duration: 0.1s;
+    animation: none;
+  }
+
+  .ios-card-active {
+    background: rgba(var(--sidebar-item-bg), 0.95);
+    border-left: 3px solid rgb(99, 102, 241);
+    box-shadow: 
+      0 7px 14px rgba(0, 0, 0, 0.1),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  }
+
+  .ios-card-active::after {
+    content: '';
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: rgb(99, 102, 241);
+  }
+
+  /* Rainbow text gradient */
+  .rainbow-text {
+    background-image: linear-gradient(
+      90deg,
+      #ff5e57,
+      #ffc107,
+      #2ecc71,
+      #4158d0,
+      #c850c0,
+      #ff5e57
+    );
+    background-size: 400% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: rainbow-text 8s linear infinite;
+  }
+
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(var(--text), 0.2);
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--text), 0.3);
+  }
+
+  /* Hide scrollbar for Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--text), 0.2) transparent;
+  }
+
+  /* Responsive styles */
+  @media (max-width: 640px) {
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+  }
+}
+
+/* Animation for gradient background */
+@keyframes gradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rainbow-text {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gradient-animate {
+  background-size: 200% 200%;
+  animation: gradientFlow 15s ease infinite;
+}
+
+/* Animation for mode transition */
+.mode-transition {
+  transition: all 0.3s ease-in-out;
+} 
+
+/* iOS 18 Floating Icon Effect */
+.ios-icon-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--sidebar-item-border), 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(var(--sidebar-item-border), 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--sidebar-item-border), 0);
+  }
+}
+
+@keyframes spring {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Đảm bảo các hiệu ứng blur hoạt động */
+.blur-3xl {
+  filter: blur(64px);
+}
+
+.blur-4xl {
+  filter: blur(96px);
+}
+
+/* Hiệu ứng đổi màu gradient */
+@keyframes hueRotate {
+  0% {
+    filter: hue-rotate(0deg) blur(64px);
+  }
+  50% {
+    filter: hue-rotate(60deg) blur(64px);
+  }
+  100% {
+    filter: hue-rotate(0deg) blur(64px);
+  }
+}
+
+.hue-animate {
+  animation: hueRotate 15s infinite linear;
+}
+
+/* Sidebar collapse button styles */
+.collapse-btn {
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+  background: rgba(var(--sidebar-bg), 0.95);
+  border: 1px solid rgba(var(--sidebar-border), 0.8);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.collapse-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0px 0px 15px rgba(var(--sidebar-border), 0.5);
+  animation: spring 1s ease-in-out;
+}
+
+.collapse-btn-icon {
+  transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+.collapse-btn-icon.collapsed {
+  transform: rotate(180deg);
+}
+
+/* Collapsed sidebar icon animation */
+.sidebar-icon {
+  transition: all 0.3s ease;
+}
+
+.sidebar-icon:hover {
+  transform: translateY(-3px);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+/* Animation for the active indicator */
+.active-indicator {
+  animation: pulse 2s infinite;
+  box-shadow: 0 0 0 rgba(59, 130, 246, 0.7);
+}
+
+/* Floating animation for icons in collapsed mode */
+@keyframes floatIcon {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.float-icon {
+  animation: floatIcon 3s ease-in-out infinite;
+}
+
+.float-icon:nth-child(2n) {
+  animation-delay: 0.5s;
+}
+
+.float-icon:nth-child(3n) {
+  animation-delay: 1s;
+}
+
+.float-icon:nth-child(4n) {
+  animation-delay: 1.5s;
+}
+
+/* Sidebar collapse/expand animations */
+.sidebar-transition {
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              opacity 0.3s ease,
+              margin 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease;
+}
+
+/* Thêm quy tắc cho phiên bản mobile để có animation mượt mà hơn */
+@media (max-width: 768px) {
+  .sidebar-transition {
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                opacity 0.3s ease,
+                margin 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.3s ease;
+  }
+}
+
+/* Sidebar collapse button animation */
+@keyframes collapseRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(180deg);
+  }
+}
+
+@keyframes expandRotate {
+  0% {
+    transform: rotate(180deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* Content shift animation when sidebar collapses/expands */
+.content-shift {
+  transition: margin-left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Các icon hiệu ứng mềm mại hơn khi sidebar mở/đóng */
+.sidebar-spring-in {
+  animation: springIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-spring-out {
+  animation: springOut 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes springIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes springOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+/* Hiệu ứng di chuyển phần tử khi sidebar đóng/mở */
+.slide-from-left {
+  animation: slideFromLeft 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.slide-to-left {
+  animation: slideToLeft 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes slideFromLeft {
+  0% {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideToLeft {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+}
+
+/* Nút mở rộng sidebar mới - thiết kế lấy cảm hứng từ iOS */
+.expand-btn {
+  background: rgba(var(--sidebar-bg), 0.95);
+  backdrop-filter: blur(var(--ios-blur));
+  border: 1px solid rgba(var(--sidebar-border), 0.8);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.expand-btn:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.expand-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Icon animation in collapse/expand buttons */
+.collapse-icon {
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.collapse-icon:hover {
+  transform: translateX(-3px);
+}
+
+.expand-icon {
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.expand-icon:hover {
+  transform: translateX(3px);
+}
+
+/* Overlay transition for collapsed sidebar */
+.overlay-transition {
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* Dark mode button styles for better visibility */
+.dark .ios-glass {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dark .sidebar-icon {
+  background-color: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark .sidebar-icon:hover {
+  border-color: rgba(148, 163, 184, 0.8);
+  box-shadow: 0 4px 15px rgba(148, 163, 184, 0.2);
+  transform: translateY(-3px);
+}
+
+.dark .ios-sidebar {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(var(--ios-blur));
+  border: none;
+  box-shadow: none;
+}
+
+/* Glow effect for sidebar buttons in dark mode */
+.dark .footer-button {
+  position: relative;
+  overflow: visible;
+}
+
+.dark .footer-button::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(to right, #3b82f6, #8b5cf6, #3b82f6);
+  border-radius: 9999px;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.dark .footer-button:hover::after {
+  opacity: 0.3;
+}
+
+/* Icon styling for dark mode */
+.dark .home-icon {
+  color: #93c5fd;
+}
+
+.dark .github-icon {
+  color: #cbd5e1;
+}
+
+.dark .theme-icon {
+  color: #fcd34d;
+}
+
+.dark .lang-icon {
+  color: #a5b4fc;
+} 
+
+/* New Gradient Border Animation */
+@layer utilities {
+  @keyframes gradient-border-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .animate-gradient-border {
+    background: linear-gradient(to right, #a855f7, #ec4899, #f59e0b, #10b981, #6366f1, #a855f7); /* Match rainbow text gradient but wrap around */
+    background-size: 300% 300%; /* Make gradient large enough to move */
+    animation: gradient-border-flow 6s linear infinite;
+  }
+  .animate-gradient-border-paused {
+    animation-play-state: paused;
+  }
+}

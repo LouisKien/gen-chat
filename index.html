@@ -1,10 +1,65 @@
 <!doctype html>
-<html lang="en">
+<html>
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+    <meta name="description" content="GenChat - AI chat application with various language support" />
+    <title>GenChat</title>
+    <!-- Prevent flash during page load -->
+    <style>
+      html {
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
+      .dark {
+        color-scheme: dark;
+        background-color: #000;
+      }
+      .light {
+        color-scheme: light;
+        background-color: #f8fafc;
+      }
+    </style>
+    <!-- Theme and Language detection script - must run before page renders -->
+    <script>
+      (function() {
+        // Kiểm tra theme từ localStorage
+        var savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else if (savedTheme === 'light') {
+          document.documentElement.classList.add('light');
+        } else {
+          // Nếu không có trong localStorage, kiểm tra system preference
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (prefersDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.add('light');
+          }
+        }
+
+        // Kiểm tra ngôn ngữ từ localStorage
+        var savedLanguage = localStorage.getItem('language');
+        if (savedLanguage === 'vi') {
+          document.documentElement.lang = 'vi';
+        } else if (savedLanguage === 'en') {
+          document.documentElement.lang = 'en';
+        } else {
+          // Nếu không có trong localStorage, kiểm tra ngôn ngữ trình duyệt
+          var userLang = navigator.language.toLowerCase().split('-')[0];
+          document.documentElement.lang = userLang === 'vi' ? 'vi' : 'en';
+        }
+        
+        // Đảm bảo không có flash khi load trang
+        document.addEventListener('DOMContentLoaded', function() {
+          document.documentElement.style.visibility = 'visible';
+          document.documentElement.style.opacity = '1';
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,10 +1,10 @@
-# Gen-Chat
+# GenChat
 
 Ứng dụng chat với AI thông qua OpenRouter, hỗ trợ đa ngôn ngữ.
 
 ## Giới thiệu
 
-Gen-Chat là một ứng dụng web cho phép người dùng trò chuyện với các mô hình AI thông qua nền tảng OpenRouter. Dự án này được phát triển bởi Louis Kien như một giải pháp chat AI đơn giản nhưng mạnh mẽ, với giao diện thân thiện và hỗ trợ đa ngôn ngữ.
+GenChat là một ứng dụng web cho phép người dùng trò chuyện với các mô hình AI thông qua nền tảng OpenRouter. Dự án này được phát triển bởi Louis Kien như một giải pháp chat AI đơn giản nhưng mạnh mẽ, với giao diện thân thiện và hỗ trợ đa ngôn ngữ.
 
 ### Tính năng chính
 
@@ -33,7 +33,7 @@ Gen-Chat là một ứng dụng web cho phép người dùng trò chuyện với
 
 1. Clone repository về máy:
    ```
-   git clone https://github.com/yourusername/gen-chat.git
+   git clone https://github.com/LouisKien/gen-chat
    cd gen-chat
    ```
 
