@@ -8,6 +8,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/chat" element={<Chat />} />
+        <Route path="/chat/:chatId" element={<Chat />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

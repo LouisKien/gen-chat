@@ -31,6 +31,10 @@ export const en = {
     recentChats: 'Recent Chats',
     modelSelection: 'Select AI Model',
     send: 'Send message',
+    noHistory: 'No chat history yet',
+    startNewChat: 'Create a new chat to get started',
+    delete: 'Delete chat',
+    poweredBy: 'Powered by'
   },
   sidebar: {
     collapse: 'Collapse',

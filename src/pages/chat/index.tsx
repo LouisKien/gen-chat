@@ -1,10 +1,13 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { LanguageSwitcher } from '../../components/LanguageSwitcher';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeSwitcher } from '../../components/ThemeSwitcher';
+import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { conversationColors, getRandomColor } from '../../utils/colors';
+import { callChatAPI, Message, availableModels, colorToGradient, getSummaryTitle, ChatHistory } from '../../utils/api';
+import { getAllChatHistory, getChatById, saveChat, deleteChat, formatTime } from '../../utils/localStorage';
+import { v4 as uuidv4 } from 'uuid';
 
 // Mảng các màu và kích thước quả cầu
 const orbColors = [
@@ -88,22 +91,177 @@ const OrbsManager = () => {
   );
 };
 
+// Component cho tiêu đề chat với hiệu ứng typing
+const TypingTitle: React.FC<{ title: string; isNew: boolean }> = ({ title, isNew }) => {
+  const [displayTitle, setDisplayTitle] = useState(title);
+  const [isTyping, setIsTyping] = useState(false);
+  const previousTitle = useRef(title);
+
+  useEffect(() => {
+    if (title !== previousTitle.current && isNew) {
+      setIsTyping(true);
+      let currentIndex = 0;
+      const finalTitle = title;
+      const typingInterval = setInterval(() => {
+        if (currentIndex <= finalTitle.length) {
+          setDisplayTitle(finalTitle.substring(0, currentIndex));
+          currentIndex++;
+        } else {
+          clearInterval(typingInterval);
+          setIsTyping(false);
+        }
+      }, 50); // Tốc độ typing
+
+      previousTitle.current = title;
+      return () => clearInterval(typingInterval);
+    }
+  }, [title, isNew]);
+
+  return (
+    <div className="text-sm font-medium truncate pr-2 whitespace-nowrap flex-1">
+      {displayTitle}
+      {isTyping && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 1, repeat: Infinity }}
+          className="ml-1"
+        >
+          |
+        </motion.span>
+      )}
+    </div>
+  );
+};
+
+// Component cho hiệu ứng typing khi chờ AI response
+const TypingIndicator: React.FC = () => {
+  return (
+    <div className="flex items-center space-x-1 p-2">
+      <motion.div
+        className="w-2 h-2 rounded-full bg-white/70"
+        animate={{
+          y: ["0%", "-50%", "0%"],
+          opacity: [0.4, 1, 0.4]
+        }}
+        transition={{
+          duration: 1.2,
+          repeat: Infinity,
+          repeatType: "loop",
+          ease: "easeInOut"
+        }}
+      />
+      <motion.div
+        className="w-2 h-2 rounded-full bg-white/70"
+        animate={{
+          y: ["0%", "-50%", "0%"],
+          opacity: [0.4, 1, 0.4]
+        }}
+        transition={{
+          duration: 1.2,
+          repeat: Infinity,
+          repeatType: "loop",
+          ease: "easeInOut",
+          delay: 0.2
+        }}
+      />
+      <motion.div
+        className="w-2 h-2 rounded-full bg-white/70"
+        animate={{
+          y: ["0%", "-50%", "0%"],
+          opacity: [0.4, 1, 0.4]
+        }}
+        transition={{
+          duration: 1.2,
+          repeat: Infinity,
+          repeatType: "loop",
+          ease: "easeInOut",
+          delay: 0.4
+        }}
+      />
+    </div>
+  );
+};
+
+// Component cho hiệu ứng chạy chữ trong phản hồi AI
+const TypewriterText: React.FC<{ text: string; isNew?: boolean }> = ({ text, isNew = true }) => {
+  const [displayText, setDisplayText] = useState(isNew ? '' : text);
+  const [isDone, setIsDone] = useState(!isNew);
+  const textLength = text.length;
+  
+  useEffect(() => {
+    if (!isNew || !text) {
+      setDisplayText(text);
+      setIsDone(true);
+      return;
+    }
+    
+    setDisplayText('');
+    setIsDone(false);
+    
+    // Tính toán thời gian hiển thị dựa trên độ dài văn bản
+    // Minimum 0.5s, maximum 3.0s
+    const displayDuration = Math.min(Math.max(textLength / 150, 0.5), 3.0) * 1000;
+    // Tính số ký tự hiển thị mỗi bước
+    const charsPerStep = Math.max(1, Math.ceil(textLength / (displayDuration / 10)));
+    // Tính thời gian mỗi bước (ms)
+    const stepInterval = displayDuration / (textLength / charsPerStep);
+    
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      currentIndex += charsPerStep;
+      if (currentIndex <= textLength) {
+        setDisplayText(text.substring(0, currentIndex));
+      } else {
+        setDisplayText(text);
+        setIsDone(true);
+        clearInterval(typingInterval);
+      }
+    }, stepInterval);
+    
+    return () => clearInterval(typingInterval);
+  }, [text, textLength, isNew]);
+  
+  return (
+    <div>
+      {displayText}
+      {!isDone && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 0.5, repeat: Infinity }}
+          className="ml-1 inline-block"
+        >
+          ▌
+        </motion.span>
+      )}
+    </div>
+  );
+};
+
 function Chat() {
   const { t } = useLanguage();
-  const [messages, setMessages] = useState<{text: string, isUser: boolean, modelId?: string}[]>([]);
+  const { chatId } = useParams<{ chatId?: string }>();
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gpt-4');
-  const [activeChat, setActiveChat] = useState<number | null>(0);
+  const [selectedModel, setSelectedModel] = useState('google/gemini-2.0-flash-exp:free');
+  const [activeChat, setActiveChat] = useState<string | null>(chatId || null);
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
   const [animateContent, setAnimateContent] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Ref for the textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Ref for the messages container to scroll it
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Thêm state để theo dõi chat mới được tạo tiêu đề
+  const [newTitleChatId, setNewTitleChatId] = useState<string | null>(null);
 
   // Theo dõi thay đổi kích thước màn hình
   useEffect(() => {
@@ -127,85 +285,229 @@ function Chat() {
     };
   }, [isSidebarOpen]);
 
-  const models = [
-    { 
-      id: 'gpt-4', 
-      name: 'GPT-4',
-      description: 'Mô hình AI tiên tiến nhất của OpenAI, với khả năng suy luận phức tạp, hiểu ngữ cảnh tốt và hỗ trợ đa dạng nhiệm vụ. Phiên bản mới nhất với cửa sổ ngữ cảnh lớn hơn và kiến thức được cập nhật.',
-      badgeColor: 'from-blue-500 to-indigo-600'
-    },
-    { 
-      id: 'gpt-3.5-turbo', 
-      name: 'GPT-3.5 Turbo',
-      description: 'Phiên bản tối ưu hóa của GPT-3.5, cân bằng tốt giữa hiệu suất và tốc độ. Phù hợp cho hầu hết các trường hợp sử dụng thông thường với chi phí thấp hơn GPT-4.',
-      badgeColor: 'from-green-500 to-emerald-600'
-    },
-    { 
-      id: 'claude-3-opus', 
-      name: 'Claude 3 Opus',
-      description: 'Mô hình mạnh mẽ nhất của Anthropic, xuất sắc trong các nhiệm vụ phức tạp, phân tích và suy luận. Được tối ưu hóa cho độ chính xác cao và khả năng hiểu văn bản phức tạp.',
-      badgeColor: 'from-purple-500 to-violet-600'
-    },
-    { 
-      id: 'claude-3-sonnet', 
-      name: 'Claude 3 Sonnet',
-      description: 'Phiên bản cân bằng của Claude 3, kết hợp tốc độ và hiệu suất cao. Phù hợp cho nhiều trường hợp sử dụng đa dạng với chi phí hợp lý.',
-      badgeColor: 'from-pink-500 to-fuchsia-600'
-    },
-    { 
-      id: 'gemini-pro', 
-      name: 'Gemini Pro',
-      description: 'Model mạnh mẽ của Google, thiết kế để hiểu và tạo văn bản, hình ảnh và mã. Được huấn luyện với lượng dữ liệu khổng lồ để đạt hiệu suất cao trong nhiều lĩnh vực.',
-      badgeColor: 'from-amber-500 to-orange-600'
-    },
-  ];
+  // Chuyển đổi từ danh sách model object sang array để hiển thị
+  const models = Object.values(availableModels).map(model => ({
+    id: model.id,
+    name: model.name,
+    description: model.description,
+    badgeColor: colorToGradient(model.color)
+  }));
 
-  const chatHistory = [
-    { 
-      id: 0, 
-      title: 'Chat về AI và Machine Learning', 
-      time: '2 giờ trước',
-      color: 'from-blue-500 to-indigo-600' // Static color for now, but we'll use random color when creating real chats
-    },
-    { 
-      id: 1, 
-      title: 'Tìm hiểu về React và Next.js', 
-      time: '5 giờ trước',
-      color: 'from-purple-500 to-pink-500'
-    },
-    { 
-      id: 2, 
-      title: 'Hướng dẫn học tiếng Anh hiệu quả', 
-      time: '1 ngày trước',
-      color: 'from-green-500 to-emerald-500'
+  // Tải lịch sử chat từ localStorage khi component mount
+  useEffect(() => {
+    const history = getAllChatHistory();
+    setChatHistory(history);
+    
+    // Kiểm tra nếu có chatId, tải tin nhắn tương ứng
+    if (chatId) {
+      const selectedChat = getChatById(chatId);
+      if (selectedChat) {
+        setActiveChat(chatId);
+        setMessages(selectedChat.messages);
+      } else {
+        // Nếu không tìm thấy chat, chuyển hướng về trang chat mới
+        navigate('/chat');
+      }
     }
-  ];
+  }, [chatId, navigate]);
 
-  const handleSendMessage = () => {
+  // Tạo chat mới
+  const createNewChat = () => {
+    // Thay vì tạo và lưu chat mới ngay lập tức, chỉ cần thay đổi trạng thái UI
+    setActiveChat(null);
+    setMessages([]);
+    // Chuyển hướng đến URL chat chung
+    navigate(`/chat`);
+  };
+
+  // Chọn một chat từ danh sách
+  const handleChatSelect = (chatId: string) => {
+    const selectedChat = getChatById(chatId);
+    if (selectedChat) {
+      setActiveChat(chatId);
+      setMessages(selectedChat.messages);
+      
+      // Tìm model gần nhất được sử dụng trong cuộc trò chuyện này
+      // Duyệt qua mảng tin nhắn từ mới nhất đến cũ nhất
+      const messagesReversed = [...selectedChat.messages].reverse();
+      // Tìm tin nhắn AI đầu tiên (gần nhất) có modelId
+      const lastAIMessage = messagesReversed.find(msg => !msg.isUser && msg.modelId);
+      
+      if (lastAIMessage && lastAIMessage.modelId) {
+        // Tự động chọn model gần nhất đã sử dụng
+        setSelectedModel(lastAIMessage.modelId);
+      }
+      
+      navigate(`/chat/${chatId}`);
+    }
+  };
+
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
-    // Add user message
-    const newMessages = [...messages, { text: inputText, isUser: true }];
+    const timestamp = Date.now();
+    const userMessage: Message = { text: inputText, isUser: true };
+    const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInputText('');
     
     // Reset textarea height after sending
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'; // Reset before calculating new height
+      textareaRef.current.style.height = 'auto';
       textareaRef.current.rows = 1;
     }
 
-    // Store the model used for the potential response *before* the timeout
+    // Kiểm tra xem có phải tin nhắn đầu tiên không
+    const isFirstMessage = messages.length === 0;
+    const initialUserMessage = inputText;
+    
+    // Lấy chat hiện tại hoặc tạo mới nếu chưa có
+    let currentChat: ChatHistory;
+    
+    if (activeChat) {
+      currentChat = getChatById(activeChat) || {
+        id: activeChat,
+        title: isFirstMessage ? 'Cuộc trò chuyện mới' : '',
+        lastUpdated: timestamp,
+        messages: newMessages,
+        color: getRandomColor()
+      };
+    } else {
+      // Tạo ID mới nếu chưa có chat nào được chọn (đây là trường hợp tạo chat mới khi gửi tin nhắn đầu tiên)
+      const newChatId = uuidv4();
+      currentChat = {
+        id: newChatId,
+        title: 'Cuộc trò chuyện mới',
+        lastUpdated: timestamp,
+        messages: newMessages,
+        color: getRandomColor()
+      };
+      setActiveChat(newChatId);
+      navigate(`/chat/${newChatId}`);
+    }
+
+    // Cập nhật messages và lastUpdated
+    currentChat.messages = newMessages;
+    currentChat.lastUpdated = timestamp;
+    
+    // Lưu chat vào localStorage - chỉ lưu khi có tin nhắn thực sự
+    saveChat(currentChat);
+    
+    // Cập nhật state
+    setChatHistory(getAllChatHistory());
+
+    // Store the model used for the potential response
     const modelForResponse = selectedModel;
 
-    // Simulate response after a short delay
-    setTimeout(() => {
-      setMessages([...newMessages, { 
-        text: `Đây là phản hồi thử nghiệm từ model ${modelForResponse}. Tính năng chat đang được phát triển.`, 
+    try {
+      setIsLoading(true);
+      
+      // Gọi API OpenRouter để lấy phản hồi trước
+      const responseText = await callChatAPI(newMessages, modelForResponse);
+      
+      // Add AI response to messages with timestamp
+      const responseTimestamp = Date.now();
+      const updatedMessages = [...newMessages, { 
+        text: responseText, 
         isUser: false,
-        modelId: modelForResponse // Add modelId to AI response
-      }]);
-    }, 1000);
+        modelId: modelForResponse,
+        timestamp: responseTimestamp
+      }];
+      
+      setMessages(updatedMessages);
+      
+      // Cập nhật chat trong localStorage với phản hồi mới
+      currentChat.messages = updatedMessages;
+      currentChat.lastUpdated = responseTimestamp;
+      saveChat(currentChat);
+      
+      // Cập nhật state
+      setChatHistory(getAllChatHistory());
+      
+      // Sau khi đã hiển thị phản hồi, tiến hành tạo tiêu đề trong background nếu là tin nhắn đầu tiên
+      if (isFirstMessage) {
+        // Không thông báo người dùng, chỉ tạo tiêu đề ở background
+        getSummaryTitle(initialUserMessage, modelForResponse)
+          .then(title => {
+            // Cập nhật tiêu đề khi đã tạo xong
+            const updatedChat = getChatById(currentChat.id);
+            if (updatedChat) {
+              updatedChat.title = title;
+              saveChat(updatedChat);
+              setChatHistory(getAllChatHistory());
+              // Đánh dấu chat này có tiêu đề mới để hiển thị animation
+              setNewTitleChatId(currentChat.id);
+              // Reset newTitleChatId sau 5 giây
+              setTimeout(() => setNewTitleChatId(null), 5000);
+            }
+          })
+          .catch(error => {
+            console.error('Error generating title in background:', error);
+            // Nếu lỗi, vẫn giữ tiêu đề mặc định hoặc dùng đoạn đầu tin nhắn
+            const fallbackTitle = initialUserMessage.length > 30 
+              ? initialUserMessage.substring(0, 30) + '...' 
+              : initialUserMessage;
+              
+            const updatedChat = getChatById(currentChat.id);
+            if (updatedChat && updatedChat.title === 'Cuộc trò chuyện mới') {
+              updatedChat.title = fallbackTitle;
+              saveChat(updatedChat);
+              setChatHistory(getAllChatHistory());
+            }
+          });
+      }
+    } catch (error) {
+      console.error('Error getting response:', error);
+      // Add error message with timestamp
+      const errorTimestamp = Date.now();
+      const updatedMessages = [...newMessages, { 
+        text: `Có lỗi xảy ra khi gọi model ${modelForResponse}. Vui lòng thử lại sau.`, 
+        isUser: false,
+        modelId: modelForResponse,
+        timestamp: errorTimestamp
+      }];
+      
+      setMessages(updatedMessages);
+      
+      // Cập nhật chat trong localStorage với thông báo lỗi
+      currentChat.messages = updatedMessages;
+      currentChat.lastUpdated = errorTimestamp;
+      saveChat(currentChat);
+      
+      // Cập nhật state
+      setChatHistory(getAllChatHistory());
+      
+      // Vẫn cố gắng tạo tiêu đề nếu là tin nhắn đầu tiên
+      if (isFirstMessage) {
+        const fallbackTitle = initialUserMessage.length > 30 
+          ? initialUserMessage.substring(0, 30) + '...' 
+          : initialUserMessage;
+        
+        currentChat.title = fallbackTitle;
+        saveChat(currentChat);
+        setChatHistory(getAllChatHistory());
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Xóa một chat
+  const handleDeleteChat = (event: React.MouseEvent, chatId: string) => {
+    event.stopPropagation();
+    
+    // Xóa chat khỏi localStorage
+    deleteChat(chatId);
+    
+    // Cập nhật state
+    setChatHistory(getAllChatHistory());
+    
+    // Nếu đang xem chat bị xóa, chuyển về trang chat mới
+    if (activeChat === chatId) {
+      setActiveChat(null);
+      setMessages([]);
+      navigate('/chat');
+    }
   };
 
   // Handle keydown events for Shift+Enter submission
@@ -273,9 +575,12 @@ function Chat() {
     }, 600);
   };
 
-  const handleChatSelect = (chatId: number) => {
-    setActiveChat(chatId);
-  };
+  // Tự động cuộn xuống cuối khi có tin nhắn mới
+  useEffect(() => {
+    if (messagesContainerRef.current && messages.length > 0) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   return (
     <div className="min-h-screen h-screen w-full flex relative overflow-hidden bg-[rgb(var(--background))]">
@@ -294,19 +599,15 @@ function Chat() {
       <motion.aside 
         className={`fixed md:sticky top-0 left-0 z-50 md:z-10 ${
           isSidebarCollapsed ? 'md:w-20' : 'md:w-72'
-        } w-72 transform sidebar-transition ease-out ${
-          isDesktop ? 'md:translate-x-0' : ''
-        } flex flex-col md:overflow-hidden md:rounded-3xl`}
+        } w-72 transform md:overflow-hidden md:rounded-3xl`}
         initial={{ x: isDesktop ? 0 : -300 }}
         animate={{ 
           x: (isDesktop || isSidebarOpen) ? 0 : -300,
           width: isSidebarCollapsed ? 80 : 288
         }}
         transition={{ 
-          type: "spring", 
-          stiffness: 300, 
-          damping: 30,
-          duration: 0.6
+          type: "tween", 
+          duration: 0.3
         }}
       >
         <div className="ios-sidebar flex flex-col h-full md:p-5 p-5 overflow-hidden md:m-0 m-0 md:rounded-3xl rounded-none md:h-[calc(100vh-0px)] h-screen relative">
@@ -315,7 +616,7 @@ function Chat() {
           <motion.div 
             className="flex items-center justify-between mb-8"
             animate={isSidebarCollapsed ? { opacity: 1 } : { opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
             <Link to="/" className={`flex items-center text-2xl font-bold ${isSidebarCollapsed ? 'w-full justify-center' : ''}`}>
               {isSidebarCollapsed ? (
@@ -327,7 +628,7 @@ function Chat() {
                     type: "spring", 
                     stiffness: 260, 
                     damping: 20,
-                    delay: 0.3
+                    duration: 0.3
                   }}
                 >
                   G
@@ -335,14 +636,9 @@ function Chat() {
               ) : (
                 <motion.span 
                   className="rainbow-text"
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 260, 
-                    damping: 20,
-                    delay: 0.1
-                  }}
+                  transition={{ duration: 0.2 }}
                 >
                   GenChat
                 </motion.span>
@@ -364,14 +660,12 @@ function Chat() {
               <motion.button 
                 className="w-12 h-12 mb-6 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white/20 overflow-visible"
                 title={t('chat.newChat')}
-                initial={{ opacity: 0, scale: 0 }}
+                initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                whileHover={{ 
-                  scale: 1.1,
-                  boxShadow: "0 10px 25px -5px rgba(59, 130, 246, 0.5), 0 8px 10px -6px rgba(147, 51, 234, 0.5)"
-                }}
-                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={createNewChat}
                 style={{
                   background: "linear-gradient(135deg, #4f46e5, #7928ca)",
                   minWidth: "48px",
@@ -387,23 +681,21 @@ function Chat() {
             <motion.button 
               className="w-full h-12 mb-6 px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white overflow-hidden"
               title={t('chat.newChat')}
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              whileHover={{ 
-                scale: 1.03,
-                boxShadow: "0 10px 25px -5px rgba(59, 130, 246, 0.5), 0 8px 10px -6px rgba(147, 51, 234, 0.5)"
-              }}
+              transition={{ duration: 0.2 }}
+              whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={createNewChat}
             >
               <AnimatePresence initial={false}>
                 {!isSidebarCollapsed && (
                   <motion.div 
                     className="flex items-center justify-center gap-3"
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    transition={{ duration: 0.2, delay: 0.1 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -417,94 +709,105 @@ function Chat() {
 
           {/* Chat History List */}
           {!isSidebarCollapsed ? (
-            <motion.div 
-              className="flex-1 overflow-y-auto mb-4 pr-1 custom-scrollbar"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, delay: isSidebarCollapsed ? 0 : 0.2 }}
-            >
-              <div className="text-sm font-medium uppercase tracking-wider pl-2 mb-3 text-[rgb(var(--text))] opacity-70 whitespace-nowrap">{t('chat.recentChats')}</div>
-              <div className="space-y-3">
-                {/* Sample chat history items */}
-                {chatHistory.map((chat, index) => (
-                  <motion.div 
-                    key={chat.id}
-                    className={`ios-card cursor-pointer ${activeChat === chat.id ? 'ios-card-active' : ''}`}
-                    title={chat.title} // Updated title to only show conversation title
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleChatSelect(chat.id)}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: 0.1 + (index * 0.05) + (isSidebarCollapsed ? 0 : 0.2) }}
-                  >
-                    {/* Tiêu đề chat */}
-                    <div className="text-sm font-medium truncate pr-4 whitespace-nowrap">{chat.title}</div>
-                    {/* Chỉ hiển thị thời gian, không hiển thị model */}
-                    <div className="text-xs mt-1 flex items-center opacity-80 whitespace-nowrap">
-                      {/* Sử dụng màu từ thuộc tính color thay vì modelColor */}
-                      <span className={`inline-block w-2 h-2 rounded-full bg-gradient-to-r ${chat.color} mr-2`}></span>
-                      {chat.time}
-                    </div>
-                  </motion.div>
-                ))}
+            <>
+              <div className="text-sm font-medium uppercase tracking-wider pl-2 mb-3 text-[rgb(var(--text))] opacity-70 whitespace-nowrap">
+                {t('chat.recentChats')}
               </div>
-            </motion.div>
+              
+              <motion.div className="flex-1 overflow-y-auto mb-4 pr-1 custom-scrollbar">
+                {chatHistory.length === 0 ? (
+                  <div className="text-center p-4 opacity-70">
+                    <p className="mb-2 text-sm">{t('chat.noHistory')}</p>
+                    <p className="text-xs">{t('chat.startNewChat')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {chatHistory.map((chat, index) => (
+                      <motion.div 
+                        key={chat.id}
+                        className={`ios-card cursor-pointer ${activeChat === chat.id ? 'ios-card-active' : ''}`}
+                        title={chat.title}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleChatSelect(chat.id)}
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.2, delay: Math.min(0.05 * index, 0.3) }}
+                      >
+                        <div className="flex justify-between items-start">
+                          {/* Sử dụng component TypingTitle */}
+                          <TypingTitle 
+                            title={chat.title} 
+                            isNew={chat.id === newTitleChatId}
+                          />
+                          
+                          {/* Nút xóa chat */}
+                          <motion.button
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-[rgb(var(--background))]/30 transition-opacity"
+                            onClick={(e) => handleDeleteChat(e, chat.id)}
+                            title={t('chat.delete')}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[rgb(var(--text))]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </motion.button>
+                        </div>
+                        
+                        {/* Hiển thị thời gian */}
+                        <div className="text-xs mt-1 flex items-center opacity-80 whitespace-nowrap">
+                          <span className={`inline-block w-2 h-2 rounded-full bg-gradient-to-r ${chat.color} mr-2`}></span>
+                          {formatTime(chat.lastUpdated)}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </>
           ) : (
             <motion.div 
               className="flex-1 flex flex-col items-center space-y-6 mb-4 mt-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
+              transition={{ duration: 0.2 }}
             >
-              {chatHistory.slice(0, 3).map((chat, index) => (
+              {(chatHistory.length <= 3 ? chatHistory : chatHistory.slice(0, 2)).map((chat, index) => (
                 <motion.div 
                   key={chat.id}
-                  // Sử dụng bg-gradient-to-r trực tiếp thay vì class modelColor
-                  className={`w-12 h-12 rounded-full ios-glass flex items-center justify-center cursor-pointer relative sidebar-icon float-icon sidebar-spring-in overflow-hidden`} // Added overflow-hidden
-                  title={chat.title} // Updated title to only show conversation title
+                  className={`w-12 h-12 rounded-full ios-glass flex items-center justify-center cursor-pointer relative sidebar-icon sidebar-spring-in overflow-visible`}
+                  title={chat.title}
                   style={{ 
-                    animationDelay: `${index * 0.2}s`,
-                    // Add a gradient background based on chat.color
                     background: `linear-gradient(135deg, var(--tw-gradient-stops))`,
                   }}
-                  whileHover={{ scale: 1.1 }}
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => handleChatSelect(chat.id)}
-                  initial={{ opacity: 0, scale: 0.5 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ 
-                    type: "spring",
-                    stiffness: 300,
-                    damping: 20,
-                    delay: 0.2 + (index * 0.1)
+                    duration: 0.2,
+                    delay: Math.min(0.05 * index, 0.1)
                   }}
                 >
-                  {/* Apply the gradient using the className instead of a separate span */}
-                  <div className={`absolute inset-0 bg-gradient-to-r ${chat.color} opacity-70`}></div>
-                  {/* Show the first letter of the chat title */}
+                  <div className={`absolute inset-0 bg-gradient-to-r ${chat.color} opacity-70 rounded-full`}></div>
                   <span className="relative z-10 text-white font-semibold text-lg">{chat.title.charAt(0)}</span>
                   {activeChat === chat.id && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full active-indicator z-20"></span>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full active-indicator z-20 border-2 border-[rgb(var(--background))]"></span>
                   )}
                 </motion.div>
               ))}
               
               {chatHistory.length > 3 && (
                 <motion.div 
-                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center cursor-pointer sidebar-icon float-icon"
-                  whileHover={{ scale: 1.1 }}
+                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center cursor-pointer"
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  initial={{ opacity: 0, scale: 0.5 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ 
-                    type: "spring",
-                    stiffness: 300,
-                    damping: 20,
-                    delay: 0.5
-                  }}
+                  transition={{ duration: 0.2, delay: 0.15 }}
                 >
-                  <span className="text-sm font-medium">+{chatHistory.length - 3}</span>
+                  <span className="text-sm font-medium">+{chatHistory.length - 2}</span>
                 </motion.div>
               )}
             </motion.div>
@@ -513,9 +816,8 @@ function Chat() {
           {/* Sidebar footer with controls */}
           <motion.div 
             className={`mt-auto border-t border-[rgb(var(--sidebar-text))]/20 pt-4 ${isSidebarCollapsed ? 'flex flex-col items-center space-y-5' : ''}`}
-            initial={false}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
             {!isSidebarCollapsed ? (
               <>
@@ -523,7 +825,7 @@ function Chat() {
                   {/* Home button */}
                   <Link 
                     to="/" 
-                    className="w-10 h-10 rounded-full ios-glass flex items-center justify-center sidebar-icon footer-button"
+                    className="w-10 h-10 rounded-full ios-glass flex items-center justify-center"
                     title={t('buttons.back')}
                     aria-label={t('buttons.back')}
                   >
@@ -537,7 +839,7 @@ function Chat() {
                     href="https://github.com/LouisKien/gen-chat" 
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-10 h-10 rounded-full ios-glass flex items-center justify-center sidebar-icon footer-button"
+                    className="w-10 h-10 rounded-full ios-glass flex items-center justify-center"
                     title="GitHub Repository"
                     aria-label="GitHub Repository"
                   >
@@ -548,23 +850,23 @@ function Chat() {
                   
                   {/* Theme switcher */}
                   <div 
-                    className="w-10 h-10 rounded-full ios-glass flex items-center justify-center sidebar-icon footer-button theme-icon"
+                    className="w-10 h-10 rounded-full ios-glass flex items-center justify-center"
                     title={t('theme.toggle')}
                   >
                     <ThemeSwitcher />
                   </div>
                   
                   {/* Language switcher */}
-                  <div className="w-10 h-10 rounded-full ios-glass flex items-center justify-center sidebar-icon footer-button lang-icon">
+                  <div className="w-10 h-10 rounded-full ios-glass flex items-center justify-center">
                     <LanguageSwitcher />
                   </div>
                 </div>
                 
                 {/* Nút thu gọn / mở rộng mới - đặt ở footer */}
                 <motion.button
-                  className="w-full py-3 px-4 mt-2 rounded-xl ios-glass flex items-center justify-center gap-2 sidebar-icon expand-btn"
+                  className="w-full py-3 px-4 mt-2 rounded-xl ios-glass flex items-center justify-center gap-2"
                   onClick={toggleSidebarCollapse}
-                  whileHover={{ y: -2, boxShadow: "0 8px 16px rgba(0, 0, 0, 0.1)" }}
+                  whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.98 }}
                   title={t('sidebar.collapse')}
                   aria-label={t('sidebar.collapse')}
@@ -585,7 +887,7 @@ function Chat() {
                         initial={{ opacity: 0, width: 0 }}
                         animate={{ opacity: 1, width: 'auto' }}
                         exit={{ opacity: 0, width: 0 }}
-                        transition={{ duration: 0.2, delay: 0.1 }}
+                        transition={{ duration: 0.2 }}
                        >
                         {t('sidebar.collapse')}
                       </motion.span>
@@ -598,7 +900,7 @@ function Chat() {
                 {/* Home button */}
                 <Link 
                   to="/" 
-                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center sidebar-icon float-icon footer-button"
+                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center"
                   title={t('buttons.back')}
                   aria-label={t('buttons.back')}
                 >
@@ -612,9 +914,8 @@ function Chat() {
                   href="https://github.com/LouisKien/gen-chat" 
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center sidebar-icon float-icon footer-button"
+                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center"
                   title="GitHub Repository"
-                  style={{ animationDelay: '0.2s' }}
                   aria-label="GitHub Repository"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 github-icon" fill="currentColor" viewBox="0 0 24 24">
@@ -624,24 +925,22 @@ function Chat() {
                 
                 {/* Theme switcher */}
                 <div 
-                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center sidebar-icon float-icon footer-button theme-icon"
+                  className="w-12 h-12 rounded-full ios-glass flex items-center justify-center"
                   title={t('theme.toggle')}
-                  style={{ animationDelay: '0.4s' }}
                 >
                   <ThemeSwitcher />
                 </div>
                 
                 {/* Language switcher */}
-                <div className="w-12 h-12 rounded-full ios-glass flex items-center justify-center sidebar-icon float-icon footer-button lang-icon" style={{ animationDelay: '0.6s' }}>
+                <div className="w-12 h-12 rounded-full ios-glass flex items-center justify-center">
                   <LanguageSwitcher />
                 </div>
                 
                 {/* Nút mở rộng mới - đặt ở footer */}
                 <motion.button
-                  className="w-12 h-12 mt-3 rounded-full ios-glass flex items-center justify-center sidebar-icon float-icon expand-btn"
-                  style={{ animationDelay: '0.8s' }}
+                  className="w-12 h-12 mt-3 rounded-full ios-glass flex items-center justify-center"
                   onClick={toggleSidebarCollapse}
-                  whileHover={{ scale: 1.1, boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)" }}
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   title={t('sidebar.expand')}
                   aria-label={t('sidebar.expand')}
@@ -663,7 +962,7 @@ function Chat() {
       </motion.aside>
       
       {/* Main content */}
-      <main className={`flex-1 flex flex-col h-screen relative z-10 transition-all duration-700 content-shift ${isSidebarCollapsed ? 'md:ml-0' : ''}`}>
+      <main className={`flex-1 flex flex-col h-screen relative z-10 transition-all duration-300 ease-out ${isSidebarCollapsed ? 'md:ml-0' : ''}`}>
         {/* Mobile Header */}
         <div className="flex md:hidden items-center p-4 glass-effect rounded-t-3xl sticky top-0 z-10">
           <motion.button 
@@ -717,7 +1016,7 @@ function Chat() {
                     return (
                       <motion.div 
                         key={index} 
-                        className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                        className={`flex flex-col ${message.isUser ? 'items-end' : 'items-start'}`}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3 }}
@@ -728,11 +1027,44 @@ function Chat() {
                             ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
                             : `bg-gradient-to-r ${aiMessageGradient} text-white` // Use model gradient for AI
                         }`}>
-                          {message.text}
+                          {message.isUser ? (
+                            message.text
+                          ) : (
+                            <TypewriterText 
+                              text={message.text} 
+                              isNew={message.timestamp ? Date.now() - message.timestamp < 1000 : false}
+                            />
+                          )}
                         </div>
+                        
+                        {/* Thêm thông tin thời gian và model cho tin nhắn của AI */}
+                        {!message.isUser && (
+                          <div className="flex items-center gap-2 mt-1 text-xs opacity-70">
+                            <span>{message.timestamp 
+                              ? new Date(message.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
+                              : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
+                            }</span>
+                            <span>•</span>
+                            <span className="font-medium">{modelInfo?.name}</span>
+                          </div>
+                        )}
                       </motion.div>
                     );
                   })}
+                  
+                  {/* Hiển thị typing indicator khi đang chờ phản hồi */}
+                  {isLoading && (
+                    <motion.div 
+                      className="flex justify-start"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className={`max-w-[80%] p-4 rounded-2xl shadow-lg bg-gradient-to-r ${models.find(m => m.id === selectedModel)?.badgeColor || 'from-gray-500 to-gray-600'} text-white`}>
+                        <TypingIndicator />
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               )}
             </div>
@@ -757,6 +1089,7 @@ function Chat() {
                   className="flex-1 bg-transparent focus:outline-none placeholder-[rgb(var(--text))]/50 resize-none overflow-hidden custom-scrollbar py-2.5 px-3"
                   placeholder={t('chat.inputPlaceholder')}
                   style={{ lineHeight: '1.5rem' }}
+                  disabled={isLoading}
                 />
                 
                 {/* Model selection trigger - Adjusted styling slightly */}
@@ -779,56 +1112,74 @@ function Chat() {
                   <AnimatePresence>
                     {isModelSelectOpen && (
                       <motion.div 
-                        className="absolute bottom-full right-0 mb-2 w-60 sm:w-80 rounded-2xl overflow-hidden shadow-lg z-30 backdrop-blur-xl bg-[rgba(var(--sidebar-bg),0.75)]"
+                        className="absolute bottom-full right-0 mb-2 w-60 sm:w-80 rounded-2xl overflow-hidden z-30"
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
                         style={{
-                          boxShadow: '0 8px 20px -5px rgba(0, 0, 0, 0.1), 0 6px 8px -6px rgba(0, 0, 0, 0.1)'
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1)'
                         }}
                       >
-                        <div className="p-2 border-b border-[rgb(var(--sidebar-text))]/15 bg-[rgba(var(--sidebar-bg),0.6)] backdrop-blur-sm">
-                          <h3 className="text-sm font-bold px-2 py-1 rainbow-text">{t('chat.modelSelection')}</h3>
+                        {/* Popup Header với gradient */}
+                        <div className="p-3 bg-gradient-to-r from-blue-600/90 to-purple-600/90 backdrop-blur-sm">
+                          <h3 className="text-sm font-bold px-2 py-1 text-white flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            {t('chat.modelSelection')}
+                          </h3>
                         </div>
-                        <div className="p-3 max-h-[300px] overflow-y-auto custom-scrollbar">
-                          {models.map(model => (
-                            <motion.button
-                              key={model.id}
-                              type="button"
-                              className={`w-full text-left p-3 mb-1.5 rounded-xl transition-all duration-200 border-2 ${
-                                selectedModel === model.id 
-                                  ? 'bg-[rgba(var(--card-bg),0.8)] border-blue-500/70 shadow-lg scale-[1.02]' 
-                                  : 'bg-[rgba(var(--card-bg),0.4)] border-transparent hover:bg-[rgba(var(--card-bg),0.6)] hover:border-[rgba(var(--sidebar-item-border),0.5)]'
-                              }`}
-                              onClick={() => {
-                                setSelectedModel(model.id);
-                                setIsModelSelectOpen(false);
-                              }}
-                              whileHover={{ x: 3 }}
-                              whileTap={{ scale: 0.98 }}
-                            >
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${model.badgeColor}`}></div>
-                                <span className="font-semibold">{model.name}</span>
-                                {selectedModel === model.id && (
-                                  <motion.svg 
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    className="h-4 w-4 ml-auto text-blue-500 dark:text-blue-400" 
-                                    fill="none" 
-                                    viewBox="0 0 24 24" 
-                                    stroke="currentColor"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1, rotate: 360 }}
-                                    transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                                  >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </motion.svg>
-                                )}
-                              </div>
-                              <p className="text-xs opacity-80 pr-1 line-clamp-2">{model.description}</p>
-                            </motion.button>
-                          ))}
+                        
+                        {/* Popup Body */}
+                        <div className="p-3 max-h-[480px] overflow-y-auto custom-scrollbar bg-[rgb(var(--background))] border-t border-b border-white/10 dark:border-gray-700/30">
+                          <div className="space-y-2">
+                            {models.map(model => (
+                              <motion.button
+                                key={model.id}
+                                type="button"
+                                className={`w-full text-left p-3 rounded-xl transition-all duration-200 ${
+                                  selectedModel === model.id 
+                                    ? 'bg-gradient-to-r from-blue-500/20 to-purple-600/20 border-2 border-blue-500/40 shadow-md' 
+                                    : 'bg-[rgb(var(--card-bg))] hover:bg-[rgb(var(--card-hover-bg))] border-2 border-transparent'
+                                }`}
+                                onClick={() => {
+                                  setSelectedModel(model.id);
+                                  setIsModelSelectOpen(false);
+                                }}
+                                whileHover={{ 
+                                  scale: 1.02, 
+                                  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)' 
+                                }}
+                                whileTap={{ scale: 0.98 }}
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className={`w-4 h-4 rounded-full bg-gradient-to-r ${model.badgeColor} flex-shrink-0`}></div>
+                                  <span className="font-semibold">{model.name}</span>
+                                  {selectedModel === model.id && (
+                                    <motion.svg 
+                                      xmlns="http://www.w3.org/2000/svg" 
+                                      className="h-5 w-5 ml-auto text-blue-500" 
+                                      fill="none" 
+                                      viewBox="0 0 24 24" 
+                                      stroke="currentColor"
+                                      initial={{ scale: 0 }}
+                                      animate={{ scale: 1, rotate: 360 }}
+                                      transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </motion.svg>
+                                  )}
+                                </div>
+                                <p className="text-xs opacity-80 pr-1 line-clamp-2">{model.description}</p>
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Popup Footer */}
+                        <div className="p-2 bg-gradient-to-r from-blue-600/90 to-purple-600/90 text-white text-xs text-center">
+                          {t('chat.poweredBy')} OpenRouter
                         </div>
                       </motion.div>
                     )}
@@ -846,15 +1197,22 @@ function Chat() {
                 <motion.button 
                   type="button"
                   onClick={handleSendMessage}
-                  className="h-12 flex items-center justify-center p-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl shadow-lg self-end"
+                  className={`h-12 flex items-center justify-center p-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl shadow-lg self-end ${isLoading ? 'opacity-50' : ''}`}
                   title={t('chat.send')}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  disabled={!inputText.trim()}
+                  disabled={!inputText.trim() || isLoading}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
+                  {isLoading ? (
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
                 </motion.button>
               </div>
             </motion.div>

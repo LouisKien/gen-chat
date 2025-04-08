@@ -24,13 +24,17 @@ export const vi = {
   },
   chat: {
     title: 'Trò chuyện với AI',
-    emptyState: 'Chưa có tin nhắn nào',
-    startPrompt: 'Nhập tin nhắn để bắt đầu cuộc trò chuyện',
+    emptyState: 'Bắt đầu một cuộc trò chuyện',
+    startPrompt: 'Nhập tin nhắn để bắt đầu trò chuyện',
     inputPlaceholder: 'Nhập tin nhắn của bạn...',
-    newChat: 'Tạo chat mới',
+    newChat: 'Cuộc trò chuyện mới',
     recentChats: 'Cuộc trò chuyện gần đây',
-    modelSelection: 'Chọn AI Model',
-    send: 'Gửi tin nhắn',
+    modelSelection: 'Chọn model AI',
+    send: 'Gửi',
+    noHistory: 'Không có lịch sử trò chuyện',
+    startNewChat: 'Hãy bắt đầu một cuộc trò chuyện mới',
+    delete: 'Xóa cuộc trò chuyện',
+    poweredBy: 'Được hỗ trợ bởi'
   },
   sidebar: {
     collapse: 'Thu gọn',
