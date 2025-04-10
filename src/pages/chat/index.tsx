@@ -254,6 +254,7 @@ function Chat() {
   const [animateContent, setAnimateContent] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Ref for the textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -305,11 +306,19 @@ function Chat() {
         setActiveChat(chatId);
         setMessages(selectedChat.messages);
       } else {
-        // Nếu không tìm thấy chat, chuyển hướng về trang chat mới
-        navigate('/chat');
+        // Hiển thị thông báo lỗi
+        setErrorMessage(t('errors.chatNotFound'));
+        
+        // Đặt timeout để chuyển hướng sau 1.5 giây
+        setTimeout(() => {
+          // Xóa thông báo lỗi
+          setErrorMessage(null);
+          // Chuyển hướng về trang chat chính
+          navigate('/chat');
+        }, 1500);
       }
     }
-  }, [chatId, navigate]);
+  }, [chatId, navigate, t]);
 
   // Tạo chat mới
   const createNewChat = () => {
@@ -339,6 +348,13 @@ function Chat() {
       }
       
       navigate(`/chat/${chatId}`);
+    } else {
+      // Hiển thị thông báo lỗi nếu không tìm thấy chat
+      setErrorMessage(t('errors.chatNotFound'));
+      setTimeout(() => {
+        setErrorMessage(null);
+        navigate('/chat');
+      }, 1500);
     }
   };
 
@@ -496,17 +512,23 @@ function Chat() {
   const handleDeleteChat = (event: React.MouseEvent, chatId: string) => {
     event.stopPropagation();
     
-    // Xóa chat khỏi localStorage
-    deleteChat(chatId);
-    
-    // Cập nhật state
-    setChatHistory(getAllChatHistory());
-    
-    // Nếu đang xem chat bị xóa, chuyển về trang chat mới
-    if (activeChat === chatId) {
-      setActiveChat(null);
-      setMessages([]);
-      navigate('/chat');
+    try {
+      // Xóa chat khỏi localStorage
+      deleteChat(chatId);
+      
+      // Cập nhật state
+      setChatHistory(getAllChatHistory());
+      
+      // Nếu đang xem chat bị xóa, chuyển về trang chat mới
+      if (activeChat === chatId) {
+        setActiveChat(null);
+        setMessages([]);
+        navigate('/chat');
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      setErrorMessage(t('errors.somethingWrong'));
+      setTimeout(() => setErrorMessage(null), 3000);
     }
   };
 
@@ -588,6 +610,21 @@ function Chat() {
 
   return (
     <div className="min-h-screen h-screen w-full flex relative overflow-hidden bg-[rgb(var(--background))]">
+      {/* Error Toast Notification */}
+      <AnimatePresence>
+        {errorMessage && (
+          <motion.div 
+            className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg"
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            transition={{ duration: 0.3 }}
+          >
+            {errorMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {/* Gradient Orbs - Random positions with fade animations */}
       <OrbsManager />
       
@@ -725,16 +762,16 @@ function Chat() {
                     <p className="text-xs">{t('chat.startNewChat')}</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {chatHistory.map((chat, index) => (
-                      <motion.div 
-                        key={chat.id}
-                        className={`ios-card cursor-pointer ${activeChat === chat.id ? 'ios-card-active' : ''}`}
+              <div className="space-y-3">
+                {chatHistory.map((chat, index) => (
+                  <motion.div 
+                    key={chat.id}
+                    className={`ios-card cursor-pointer ${activeChat === chat.id ? 'ios-card-active' : ''}`}
                         title={chat.title}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => handleChatSelect(chat.id)}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleChatSelect(chat.id)}
                         initial={{ opacity: 0, x: -5 }}
-                        animate={{ opacity: 1, x: 0 }}
+                    animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.2, delay: Math.min(0.05 * index, 0.3) }}
                       >
                         <div className="flex justify-between items-start">
@@ -759,15 +796,15 @@ function Chat() {
                         </div>
                         
                         {/* Hiển thị thời gian */}
-                        <div className="text-xs mt-1 flex items-center opacity-80 whitespace-nowrap">
-                          <span className={`inline-block w-2 h-2 rounded-full bg-gradient-to-r ${chat.color} mr-2`}></span>
+                    <div className="text-xs mt-1 flex items-center opacity-80 whitespace-nowrap">
+                      <span className={`inline-block w-2 h-2 rounded-full bg-gradient-to-r ${chat.color} mr-2`}></span>
                           {formatTime(chat.lastUpdated)}
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
                 )}
-              </motion.div>
+            </motion.div>
             </>
           ) : (
             <motion.div 
@@ -982,13 +1019,12 @@ function Chat() {
           <h1 className="text-xl font-bold rainbow-text">GenChat</h1>
         </div>
 
-        {/* Chat Container */}
-        <div className="flex-1 overflow-hidden p-4 pt-0 md:p-6 flex flex-col h-full">
-          <div className="flex-1 overflow-hidden flex flex-col h-full">
-            {/* Messages area - Add ref here */}
+        {/* Chat Container - Adjusted for fixed bottom input on mobile */}
+        <div className="flex-1 overflow-hidden p-4 pt-0 md:p-6 flex flex-col h-full relative">
+          {/* Messages area - Add padding-bottom for mobile to prevent messages being hidden behind the fixed input */}
             <div 
               ref={messagesContainerRef} 
-              className="flex-1 overflow-y-auto mb-4 p-5 md:rounded-3xl rounded-b-3xl glass-effect custom-scrollbar"
+            className="flex-1 overflow-y-auto mb-4 md:mb-4 p-5 md:rounded-3xl rounded-b-3xl glass-effect custom-scrollbar pb-[80px] sm:pb-5"
             >
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center opacity-70">
@@ -1020,7 +1056,7 @@ function Chat() {
                     return (
                       <motion.div 
                         key={index} 
-                        className={`flex flex-col ${message.isUser ? 'items-end' : 'items-start'}`}
+                      className={`flex flex-col ${message.isUser ? 'items-end' : 'items-start'}`}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3 }}
@@ -1031,55 +1067,57 @@ function Chat() {
                             ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
                             : `bg-gradient-to-r ${aiMessageGradient} text-white` // Use model gradient for AI
                         }`}>
-                          {message.isUser ? (
-                            message.text
-                          ) : (
-                            <TypewriterText 
-                              text={message.text} 
-                              isNew={message.timestamp ? Date.now() - message.timestamp < 1000 : false}
-                            />
-                          )}
-                        </div>
-                        
-                        {/* Thêm thông tin thời gian và model cho tin nhắn của AI */}
-                        {!message.isUser && (
-                          <div className="flex items-center gap-2 mt-1 text-xs opacity-70">
-                            <span>{message.timestamp 
-                              ? new Date(message.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
-                              : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
-                            }</span>
-                            <span>•</span>
-                            <span className="font-medium">{modelInfo?.name}</span>
-                          </div>
+                        {message.isUser ? (
+                          message.text
+                        ) : (
+                          <TypewriterText 
+                            text={message.text} 
+                            isNew={message.timestamp ? Date.now() - message.timestamp < 1000 : false}
+                          />
                         )}
+                        </div>
+                      
+                      {/* Thêm thông tin thời gian và model cho tin nhắn của AI */}
+                      {!message.isUser && (
+                        <div className="flex items-center gap-2 mt-1 text-xs opacity-70">
+                          <span>{message.timestamp 
+                            ? new Date(message.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
+                            : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
+                          }</span>
+                          <span>•</span>
+                          <span className="font-medium">{modelInfo?.name}</span>
+                        </div>
+                      )}
                       </motion.div>
                     );
                   })}
-                  
-                  {/* Hiển thị typing indicator khi đang chờ phản hồi */}
-                  {isLoading && (
-                    <motion.div 
-                      className="flex justify-start"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <div className={`max-w-[80%] p-4 rounded-2xl shadow-lg bg-gradient-to-r ${models.find(m => m.id === selectedModel)?.badgeColor || 'from-gray-500 to-gray-600'} text-white`}>
-                        <TypingIndicator />
-                      </div>
-                    </motion.div>
-                  )}
+                
+                {/* Hiển thị typing indicator khi đang chờ phản hồi */}
+                {isLoading && (
+                  <motion.div 
+                    className="flex justify-start"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className={`max-w-[80%] p-4 rounded-2xl shadow-lg bg-gradient-to-r ${models.find(m => m.id === selectedModel)?.badgeColor || 'from-gray-500 to-gray-600'} text-white`}>
+                      <TypingIndicator />
+                    </div>
+                  </motion.div>
+                )}
                 </div>
               )}
             </div>
             
-            {/* Input area container with gradient border - ADDED motion and entry animation */}
+          {/* Input area container - Fixed position on mobile, normal on desktop */}
             <motion.div 
-              className="relative rounded-3xl animate-gradient-border border-2 border-transparent"
-              initial={{ opacity: 0, y: 20 }} // Start invisible and slightly lower
-              animate={{ opacity: 1, y: 0 }} // Fade in and slide up to position
-              transition={{ duration: 0.5, ease: "easeOut", delay: 0.3 }} // Add a slight delay
-            >
+            className="md:relative fixed left-0 right-0 bottom-0 md:bottom-auto md:left-auto md:right-auto px-4 pb-4 md:p-0 bg-[rgb(var(--background))] md:bg-transparent z-10"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0.3 }}
+          >
+            {/* Gradient border wrapper */}
+            <div className="rounded-3xl animate-gradient-border border-2 border-transparent">
               {/* Inner container - Slightly smaller border-radius (rounded-[1.4rem]) */}
               <div className="flex items-center gap-2 bg-[rgb(var(--background))] p-2 rounded-[1.4rem]">
                 {/* Textarea takes most space */}
@@ -1096,7 +1134,7 @@ function Chat() {
                   disabled={isLoading}
                 />
                 
-                {/* Model selection trigger - Adjusted styling slightly */}
+                {/* Model selection trigger */}
                 <div className="relative self-end">
                   <div 
                     className="h-12 flex items-center justify-center cursor-pointer z-10 transition-transform duration-200 ease-out hover:scale-105"
@@ -1112,7 +1150,7 @@ function Chat() {
                     </div>
                   </div>
 
-                  {/* Model Selector Popup - Remains the same */}
+                  {/* Model Selector Popup */}
                   <AnimatePresence>
                     {isModelSelectOpen && (
                       <motion.div 
@@ -1146,46 +1184,46 @@ function Chat() {
                           </div>
                           
                           <div className="space-y-2">
-                            {models.map(model => (
-                              <motion.button
-                                key={model.id}
-                                type="button"
+                          {models.map(model => (
+                            <motion.button
+                              key={model.id}
+                              type="button"
                                 className={`w-full text-left p-3 rounded-xl transition-all duration-200 ${
-                                  selectedModel === model.id 
+                                selectedModel === model.id 
                                     ? 'bg-gradient-to-r from-blue-500/20 to-purple-600/20 border-2 border-blue-500/40 shadow-md' 
                                     : 'bg-[rgb(var(--card-bg))] hover:bg-[rgb(var(--card-hover-bg))] border-2 border-transparent'
-                                }`}
-                                onClick={() => {
-                                  setSelectedModel(model.id);
-                                  setIsModelSelectOpen(false);
-                                }}
+                              }`}
+                              onClick={() => {
+                                setSelectedModel(model.id);
+                                setIsModelSelectOpen(false);
+                              }}
                                 whileHover={{ 
                                   scale: 1.02, 
                                   boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)' 
                                 }}
-                                whileTap={{ scale: 0.98 }}
-                              >
-                                <div className="flex items-center gap-2 mb-1">
+                              whileTap={{ scale: 0.98 }}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
                                   <div className={`w-4 h-4 rounded-full bg-gradient-to-r ${model.badgeColor} flex-shrink-0`}></div>
-                                  <span className="font-semibold">{model.name}</span>
-                                  {selectedModel === model.id && (
-                                    <motion.svg 
-                                      xmlns="http://www.w3.org/2000/svg" 
+                                <span className="font-semibold">{model.name}</span>
+                                {selectedModel === model.id && (
+                                  <motion.svg 
+                                    xmlns="http://www.w3.org/2000/svg" 
                                       className="h-5 w-5 ml-auto text-blue-500" 
-                                      fill="none" 
-                                      viewBox="0 0 24 24" 
-                                      stroke="currentColor"
-                                      initial={{ scale: 0 }}
-                                      animate={{ scale: 1, rotate: 360 }}
-                                      transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                                    >
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </motion.svg>
-                                  )}
-                                </div>
-                                <p className="text-xs opacity-80 pr-1 line-clamp-2">{model.description}</p>
-                              </motion.button>
-                            ))}
+                                    fill="none" 
+                                    viewBox="0 0 24 24" 
+                                    stroke="currentColor"
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1, rotate: 360 }}
+                                    transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </motion.svg>
+                                )}
+                              </div>
+                              <p className="text-xs opacity-80 pr-1 line-clamp-2">{model.description}</p>
+                            </motion.button>
+                          ))}
                           </div>
                         </div>
                         
@@ -1205,7 +1243,7 @@ function Chat() {
                   )}
                 </div>
 
-                {/* Submit button - Adjusted styling slightly */}
+                {/* Submit button */}
                 <motion.button 
                   type="button"
                   onClick={handleSendMessage}
@@ -1221,14 +1259,14 @@ function Chat() {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
                   )}
                 </motion.button>
               </div>
+              </div>
             </motion.div>
-          </div>
         </div>
       </main>
     </div>

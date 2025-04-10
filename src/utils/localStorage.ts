@@ -17,8 +17,15 @@ export const getAllChatHistory = (): ChatHistory[] => {
 
 // Lấy thông tin một chat cụ thể theo ID
 export const getChatById = (chatId: string): ChatHistory | null => {
-  const allChats = getAllChatHistory();
-  return allChats.find(chat => chat.id === chatId) || null;
+  try {
+    if (!chatId) return null;
+    
+    const allChats = getAllChatHistory();
+    return allChats.find(chat => chat.id === chatId) || null;
+  } catch (error) {
+    console.error('Error getting chat by ID:', error);
+    return null;
+  }
 };
 
 // Lưu hoặc cập nhật một chat

@@ -43,4 +43,9 @@ export const vi = {
   theme: {
     toggle: 'Chuyển giao diện (Sáng/Tối)',
   },
+  errors: {
+    chatNotFound: 'Cuộc trò chuyện không tồn tại',
+    apiKeyMissing: 'API key chưa được cấu hình',
+    somethingWrong: 'Đã xảy ra lỗi, vui lòng thử lại sau'
+  },
 }; 

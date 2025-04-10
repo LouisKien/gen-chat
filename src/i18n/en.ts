@@ -43,4 +43,9 @@ export const en = {
   theme: {
     toggle: 'Toggle theme (Light/Dark)',
   },
+  errors: {
+    chatNotFound: 'Conversation not found',
+    apiKeyMissing: 'API key is not configured',
+    somethingWrong: 'Something went wrong, please try again later'
+  },
 }; 
